@@ -5,18 +5,23 @@ import pyodbc
 
 CSV_FILE = "BRMS_100_Records.csv"
 
+# ---------------- GLOBAL FLAGS ----------------
+csv_loaded = False
+
 # ---------------- CONNECTIONS ----------------
 
-# MongoDB
-mongo_client = MongoClient("mongodb://localhost:27017/")
-mdb = mongo_client["BRMSFinal1"]
-mongo_col = mdb["brms_denorm"]
+# MongoDB (configurable)
+mongo_client = MongoClient(
+    os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+)
+mdb = mongo_client[os.getenv("MONGO_DB", "BRMS_DB")]
+mongo_col = mdb[os.getenv("MONGO_COLLECTION", "brms_denorm")]
 
-# SQL Server
+# SQL Server (configurable)
 sql_conn = pyodbc.connect(
-    "DRIVER={SQL Server};"
-    "SERVER=WAARIHA-LENOVO\\SQLEXPRESS;"
-    "DATABASE=BRMSFinal1;"
+    f"DRIVER={{SQL Server}};"
+    f"SERVER={os.getenv('SQL_SERVER', 'YOUR_SERVER_NAME\\SQLEXPRESS')};"
+    f"DATABASE={os.getenv('SQL_DB', 'BRMS_DB')};"
     "Trusted_Connection=yes;"
 )
 cursor = sql_conn.cursor()
@@ -56,12 +61,10 @@ def load_csv():
 
 
 def insert_mongodb():
-    try:
-        if not csv_loaded:
-            print("Please load CSV first (Option 1).")
-            return
-    except NameError:
-        print("CSV status not found. Please load CSV first (Option 1).")
+    global csv_loaded
+
+    if not csv_loaded:
+        print("Please load CSV first (Option 1).")
         return
 
     data = load_csv()
@@ -114,12 +117,10 @@ def insert_mongodb():
 
 
 def insert_sql():
-    try:
-        if not csv_loaded:
-            print("Please load CSV first (Option 1).")
-            return
-    except NameError:
-        print("CSV status not found. Please load CSV first (Option 1).")
+    global csv_loaded
+
+    if not csv_loaded:
+        print("Please load CSV first (Option 1).")
         return
 
     if mongo_col.count_documents({}) == 0:
@@ -217,23 +218,39 @@ def view_status():
 
 
 def delete_csv():
-    if os.path.exists(CSV_FILE):
-        with open(CSV_FILE) as f:
-            count = sum(1 for _ in csv.DictReader(f))
-
-        os.remove(CSV_FILE)
-        print("CSV file deleted")
-        print("CSV records deleted:", count)
-    else:
+    if not os.path.exists(CSV_FILE):
         print("CSV file not found")
+        return
+
+    confirm = input("This will delete the CSV file. Type YES to continue: ")
+    if confirm != "YES":
+        print("Operation cancelled.")
+        return
+
+    with open(CSV_FILE) as f:
+        count = sum(1 for _ in csv.DictReader(f))
+
+    os.remove(CSV_FILE)
+    print("CSV file deleted")
+    print("CSV records deleted:", count)
 
 
 def delete_mongodb():
+    confirm = input("This will delete ALL MongoDB records. Type YES to continue: ")
+    if confirm != "YES":
+        print("Operation cancelled.")
+        return
+
     deleted = mongo_col.delete_many({})
     print("MongoDB records deleted:", deleted.deleted_count)
 
 
 def delete_sql():
+    confirm = input("This will clear ALL SQL tables. Type YES to continue: ")
+    if confirm != "YES":
+        print("Operation cancelled.")
+        return
+
     cursor.execute("DELETE FROM Payment")
     pay = cursor.rowcount
 
